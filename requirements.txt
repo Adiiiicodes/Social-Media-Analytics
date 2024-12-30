@@ -1,0 +1,3 @@
+Flask==2.2.3
+cassandra-driver==3.25.0
+langflow==0.0.5
