@@ -1,21 +1,26 @@
 from flask import Flask, request, jsonify, render_template
-from cassandra.cluster import Cluster
-from cassandra.auth import PlainTextAuthProvider
-from cassandra.query import SimpleStatement
+from astrapy import DataAPIClient
+import os
+from dotenv import load_dotenv
+from flask_cors import CORS
+
+
+# Load environment variables
+load_dotenv()
 
 app = Flask(__name__)
 
-# Configuration for DataStax Astra DB
-ASTRA_DB_CLIENT_ID = "your-client-id"
-ASTRA_DB_CLIENT_SECRET = "your-client-secret"
-ASTRA_DB_SECURE_CONNECT_BUNDLE_PATH = "path/to/your/secure-connect-database-name.zip"
-ASTRA_KEYSPACE = "your-keyspace"
+# Enable CORS for the app
+CORS(app)
 
-# Set up authentication and secure connect bundle
-auth_provider = PlainTextAuthProvider(ASTRA_DB_CLIENT_ID, ASTRA_DB_CLIENT_SECRET)
-cluster = Cluster(cloud={'secure_connect_bundle': ASTRA_DB_SECURE_CONNECT_BUNDLE_PATH}, auth_provider=auth_provider)
-session = cluster.connect()
-session.set_keyspace(ASTRA_KEYSPACE)
+# Configuration for DataStax Astra DB from .env file
+ASTRA_DB_TOKEN = os.getenv("ASTRA_DB_TOKEN")
+ASTRA_DB_URL = os.getenv("ASTRA_DB_URL")
+ASTRA_KEYSPACE = os.getenv("ASTRA_KEYSPACE")
+
+# Initialize Astra DB client
+client = DataAPIClient(ASTRA_DB_TOKEN)
+db = client.get_database_by_api_endpoint(ASTRA_DB_URL)
 
 # Route for the home page
 @app.route("/")
@@ -29,16 +34,16 @@ def analyze():
     if not post_type:
         return jsonify({"error": "Post type is required"}), 400
 
-    # Query Astra DB
-    query = f"SELECT likes, shares, comments FROM engagement WHERE post_type = '{post_type}'"
-    rows = session.execute(query)
+    # Query Astra DB using collection
+    collection = db[ASTRA_KEYSPACE]["engagement"]
+    documents = collection.find({"post_type": post_type})
 
     # Calculate average metrics
     total_likes = total_shares = total_comments = count = 0
-    for row in rows:
-        total_likes += row.likes
-        total_shares += row.shares
-        total_comments += row.comments
+    for doc in documents:
+        total_likes += doc.get("likes", 0)
+        total_shares += doc.get("shares", 0)
+        total_comments += doc.get("comments", 0)
         count += 1
 
     if count == 0:
