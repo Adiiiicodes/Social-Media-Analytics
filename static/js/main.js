@@ -2,10 +2,10 @@ document.addEventListener('DOMContentLoaded', function() {
     const chatMessages = document.getElementById('chatMessages');
     const userInput = document.getElementById('userInput');
     const sendButton = document.getElementById('sendButton');
+    const vizSection = document.getElementById('visualizationSection');
     const vizContainer = document.getElementById('visualizationContainer');
 
-    // Handle message sending
-    function sendMessage() {
+    async function sendMessage() {
         const message = userInput.value.trim();
         if (message === '') return;
 
@@ -13,21 +13,33 @@ document.addEventListener('DOMContentLoaded', function() {
         addMessage(message, 'user');
         userInput.value = '';
 
-        // Simulate bot response (replace with actual API call later)
-        setTimeout(() => {
-            // Example bot response with visualization
-            if (message.toLowerCase().includes('analytics') || 
-                message.toLowerCase().includes('stats') ||
-                message.toLowerCase().includes('metrics')) {
-                addMessage('Here\'s your social media analytics:', 'bot');
-                addVisualization();
+        try {
+            const response = await fetch('/api/chat', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ message: message })
+            });
+
+            const data = await response.json();
+            
+            // Add AI response
+            addMessage(data.response.text, 'bot');
+
+            // Handle visualization
+            if (data.should_show_viz) {
+                showVisualization();
+                addVisualization(data.response);
             } else {
-                addMessage('I can help you analyze your social media performance. Try asking about your analytics, stats, or metrics!', 'bot');
+                hideVisualization();
             }
-        }, 1000);
+        } catch (error) {
+            console.error('Error:', error);
+            addMessage('Sorry, there was an error processing your request.', 'bot');
+        }
     }
 
-    // Add message to chat
     function addMessage(text, sender) {
         const messageDiv = document.createElement('div');
         messageDiv.classList.add('message', `${sender}-message`);
@@ -36,25 +48,33 @@ document.addEventListener('DOMContentLoaded', function() {
         chatMessages.scrollTop = chatMessages.scrollHeight;
     }
 
-    // Add example visualization (replace with actual data visualization later)
-    function addVisualization() {
+    function showVisualization() {
+        vizSection.classList.add('active');
+    }
+
+    function hideVisualization() {
+        vizSection.classList.remove('active');
+        setTimeout(() => {
+            vizContainer.innerHTML = '';
+        }, 300);
+    }
+
+    function addVisualization(data) {
         const vizDiv = document.createElement('div');
-        vizDiv.style.border = '2px solid black';
-        vizDiv.style.padding = '1rem';
-        vizDiv.style.marginBottom = '1rem';
-        vizDiv.style.background = 'white';
-        vizDiv.style.boxShadow = '4px 4px 0 black';
-        
-        vizDiv.innerHTML = `
-            <h3 style="margin-bottom: 1rem;">Sample Metrics Visualization</h3>
-            <div style="width: 100%; height: 200px; background: #FFE147; 
-                        border: 2px solid black; display: flex; 
-                        justify-content: center; align-items: center;">
-                [Placeholder for actual visualization]
+        vizDiv.classList.add('viz-card');
+        vizDiv.innerHTML = parseDataToVisualization(data);
+        vizContainer.prepend(vizDiv);
+    }
+
+    function parseDataToVisualization(data) {
+        // Parse the response and create appropriate visualization
+        // This is a placeholder - implement actual visualization logic
+        return `
+            <h3>Analysis Results</h3>
+            <div class="viz-content">
+                ${data.text}
             </div>
         `;
-        
-        vizContainer.prepend(vizDiv);
     }
 
     // Event listeners
@@ -67,7 +87,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // Handle textarea auto-resize
     userInput.addEventListener('input', function() {
         this.style.height = 'auto';
         this.style.height = Math.min(this.scrollHeight, 150) + 'px';
