@@ -32,6 +32,41 @@ body {
     text-align: center;
 }
 
+/* Landing Page Styles */
+.landing-page {
+    position: relative;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    gap: 2.5rem;
+    text-align: center;
+    background-color: #ffffff; /* Base background color */
+    overflow: hidden;
+}
+
+/* Landing Page Styles */
+.landing-page {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    gap: 2.5rem;
+    text-align: center;
+    background: repeating-linear-gradient(
+        45deg,
+        #000a51,
+        #000a51 25px,
+        #5b86e9 25px,
+        #5b86e9 50px
+    );
+}
+
+
 .logo {
     font-size: 2rem;
     font-weight: 900;
@@ -74,6 +109,7 @@ body {
     text-decoration: none;
     color: var(--text);
     transition: transform 0.2s, box-shadow 0.2s;
+    margin-bottom: 30px;
 }
 
 .get-started-btn:hover {
@@ -82,6 +118,10 @@ body {
 }
 
 /* Analyzer Page Styles */
+
+body {
+    background-color: #9c7bff;
+   }
 .analyzer-container {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -96,6 +136,12 @@ body {
     background: white;
     display: flex;
     flex-direction: column;
+    /*background: linear-gradient(315deg, #ff4d4d, #4d88ff);*/
+    
+        background-color: #50ffaf;
+       
+    
+
 }
 
 .chat-messages {
@@ -117,6 +163,8 @@ body {
 .bot-message {
     background: var(--primary);
     align-self: flex-start;
+    background-color: #ff8acd;
+    
 }
 
 .user-message {
@@ -138,6 +186,7 @@ textarea {
     resize: none;
     height: 60px;
     font-size: 1rem;
+    
 }
 
 .send-btn {
@@ -177,4 +226,49 @@ textarea {
     .hero-title {
         font-size: 2.5rem;
     }
+}
+
+/* Updated Analyzer Page Styles */
+.analyzer-container {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 2rem;
+    height: 100vh;
+    padding: 2rem;
+}
+
+.chat-section {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 4rem);
+}
+
+.chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+
+.input-container {
+    position: sticky;
+    bottom: 0;
+    background: var(--background);
+    padding: 1rem;
+    border-top: 3px solid var(--text);
+    box-shadow: 0 -4px 12px rgba(0,0,0,0.1);
+    z-index: 10;
+}
+
+.visualization-section {
+    display: none; /* Hidden by default */
+    width: 0;
+    opacity: 0;
+    transition: all 0.3s ease-in-out;
+}
+
+.visualization-section.active {
+    display: flex;
+    width: 50vw;
+    opacity: 1;
 }
