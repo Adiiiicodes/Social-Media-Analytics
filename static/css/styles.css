@@ -1,47 +1,180 @@
-body {
-    font-family: Arial, sans-serif;
-    background-color: #f4f4f9;
+/* Reset and base styles */
+* {
     margin: 0;
     padding: 0;
+    box-sizing: border-box;
+    font-family: 'Inter', system-ui, sans-serif;
 }
-.container {
-    width: 80%;
-    margin: auto;
-    padding: 20px;
-    background: white;
-    margin-top: 50px;
-    border-radius: 10px;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+
+:root {
+    --primary: #FF4D4D;
+    --secondary: #FFE147;
+    --accent: #4DFFFF;
+    --background: #FFFFFF;
+    --text: #000000;
+    --shadow-offset: 4px;
 }
-h1 {
-    text-align: center;
-    color: #333;
+
+body {
+    background-color: var(--background);
+    min-height: 100vh;
 }
-form {
-    margin-top: 20px;
+
+/* Landing Page Styles */
+.landing-page {
+    height: 100vh;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    gap: 2.5rem;
+    text-align: center;
 }
-input, button {
-    padding: 10px;
-    font-size: 16px;
-    border-radius: 5px;
-    border: 1px solid #ddd;
+
+.logo {
+    font-size: 2rem;
+    font-weight: 900;
+    padding: 1rem 2rem;
+    background: var(--accent);
+    border: 3px solid var(--text);
+    box-shadow: var(--shadow-offset) var(--shadow-offset) 0 var(--text);
+    transform: rotate(-3deg);
 }
-button {
-    background-color: #5cb85c;
-    color: white;
-    border: none;
+
+.hero-title {
+    font-size: 4rem;
+    font-weight: 900;
+    max-width: 800px;
+    border: 3px solid var(--text);
+    padding: 2rem;
+    background: var(--primary);
+    box-shadow: var(--shadow-offset) var(--shadow-offset) 0 var(--text);
+    transform: rotate(1deg);
+}
+
+.hero-subtitle {
+    font-size: 1.5rem;
+    font-weight: 600;
+    max-width: 600px;
+    padding: 1rem;
+    background: var(--secondary);
+    border: 3px solid var(--text);
+    box-shadow: var(--shadow-offset) var(--shadow-offset) 0 var(--text);
+}
+
+.get-started-btn {
+    font-size: 1.5rem;
+    font-weight: 700;
+    padding: 1rem 2rem;
+    border: 3px solid var(--text);
+    background: var(--accent);
     cursor: pointer;
+    box-shadow: var(--shadow-offset) var(--shadow-offset) 0 var(--text);
+    text-decoration: none;
+    color: var(--text);
+    transition: transform 0.2s, box-shadow 0.2s;
 }
-button:hover {
-    background-color: #4cae4c;
+
+.get-started-btn:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: 6px 6px 0 var(--text);
 }
-.results {
-    margin-top: 20px;
-    padding: 10px;
-    border: 1px solid #ddd;
-    border-radius: 5px;
-    background: #f9f9f9;
+
+/* Analyzer Page Styles */
+.analyzer-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+    height: 100vh;
+    padding: 2rem;
+}
+
+.chat-section, .visualization-section {
+    border: 3px solid var(--text);
+    box-shadow: var(--shadow-offset) var(--shadow-offset) 0 var(--text);
+    background: white;
+    display: flex;
+    flex-direction: column;
+}
+
+.chat-messages {
+    flex-grow: 1;
+    padding: 1rem;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.message {
+    padding: 1rem;
+    border: 2px solid var(--text);
+    box-shadow: 2px 2px 0 var(--text);
+    max-width: 80%;
+}
+
+.bot-message {
+    background: var(--primary);
+    align-self: flex-start;
+}
+
+.user-message {
+    background: var(--secondary);
+    align-self: flex-end;
+}
+
+.input-container {
+    padding: 1rem;
+    display: flex;
+    gap: 1rem;
+    border-top: 3px solid var(--text);
+}
+
+textarea {
+    flex-grow: 1;
+    padding: 0.5rem;
+    border: 2px solid var(--text);
+    resize: none;
+    height: 60px;
+    font-size: 1rem;
+}
+
+.send-btn {
+    padding: 0.5rem 1.5rem;
+    background: var(--accent);
+    border: 2px solid var(--text);
+    box-shadow: 2px 2px 0 var(--text);
+    cursor: pointer;
+    font-weight: 600;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.send-btn:hover {
+    transform: translate(-1px, -1px);
+    box-shadow: 3px 3px 0 var(--text);
+}
+
+.visualization-section {
+    padding: 1rem;
+    overflow-y: auto;
+}
+
+.viz-container {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .analyzer-container {
+        grid-template-columns: 1fr;
+    }
+    
+    .hero-title {
+        font-size: 2.5rem;
+    }
 }
