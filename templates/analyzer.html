@@ -7,11 +7,18 @@
     <link rel="stylesheet" href="static/css/styles.css">
 </head>
 <body>
+    <!-- Background Animation -->
+    <div class="animated-background">
+        <div class="shape"></div>
+        <div class="shape"></div>
+        <div class="shape"></div>
+    </div>
+
     <div class="analyzer-container">
         <div class="chat-section">
             <div class="chat-messages" id="chatMessages">
                 <div class="message bot-message">
-                    Hello! I'm your social media analyzer. Share your social media post URL or content to get started.
+                    Hello! I'm your social media analyzer. Ask your queries related to your past or future posts.
                 </div>
             </div>
             <div class="input-container">
@@ -19,7 +26,7 @@
                 <button id="sendButton" class="send-btn">Send</button>
             </div>
         </div>
-        <div class="visualization-section">
+        <div class="visualization-section" id="visualizationSection">
             <div class="viz-container" id="visualizationContainer">
                 <!-- Graphs will be dynamically inserted here -->
             </div>
