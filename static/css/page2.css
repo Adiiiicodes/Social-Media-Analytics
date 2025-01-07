@@ -1,0 +1,128 @@
+/* Updated CSS: Second Style Structure + First Style Colors */
+
+body {
+    background-color: #9c7bff; /* Purple background matching landing page */
+}
+
+.analyzer-container {
+    display: grid;
+    grid-template-columns: 1fr auto; /* Second style structure */
+    gap: 2rem;
+    height: 95vh;
+    padding: 2rem;
+    box-sizing: border-box; 
+}
+
+.chat-section {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 4rem); /* Second style height calculation */
+    border: 3px solid #000000; /* First style colors */
+    box-shadow: 4px 4px 0 #000000; /* First style shadow */
+    background-color: #ffffff; /* First style white background */
+}
+
+.chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1rem;
+    margin-bottom: 1rem; /* Second style spacing */
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.message {
+    padding: 1rem;
+    border: 2px solid #000000; /* Black border */
+    box-shadow: 2px 2px 0 #000000; /* First style shadow */
+    max-width: 80%;
+}
+
+.bot-message {
+    background-color: #ff4d4d; /* First style red for bot messages */
+    color: #ffffff; /* White text for readability */
+    align-self: flex-start;
+}
+
+.user-message {
+    background-color: #9c7bff; /* First style purple for user messages */
+    color: #ffffff; /* White text for contrast */
+    align-self: flex-end;
+}
+
+.input-container {
+    position: sticky; /* Second style sticky positioning */
+    bottom: 0;
+    background-color: #f5f5ff; /* First style light lavender background */
+    padding: 1rem;
+    display: flex;
+    gap: 1rem;
+    border-top: 3px solid #000000; /* First style black border */
+    box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.1); /* Second style shadow */
+    z-index: 10; /* Second style z-index */
+}
+
+textarea {
+    flex-grow: 1;
+    padding: 0.5rem;
+    border: 2px solid #000000; /* Black border */
+    background-color: #f5f5ff; /* Light lavender for input field */
+    color: #000000; /* Black text */
+    resize: none;
+    height: 60px;
+    font-size: 1rem;
+}
+
+.send-btn {
+    padding: 0.5rem 1.5rem;
+    background-color: #ff4d4d; /* Red button matching landing page */
+    color: #ffffff; /* White text */
+    border: 2px solid #000000; /* Black border */
+    box-shadow: 2px 2px 0 #000000; /* Shadow */
+    cursor: pointer;
+    font-weight: 600;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.send-btn:hover {
+    transform: translate(-1px, -1px);
+    box-shadow: 3px 3px 0 #000000; /* Slightly darker shadow on hover */
+    background-color: #e53e3e; /* Slightly darker red on hover */
+}
+
+.visualization-section {
+    padding: 1rem; /* Second style */
+    overflow-y: auto; /* Second style */
+    display: none; /* Hidden by default */
+    width: 0; /* Second style */
+    opacity: 0; /* Second style */
+    transition: all 0.3s ease-in-out; /* Smooth transition */
+}
+
+.visualization-section.active {
+    display: flex; /* Show when active */
+    width: 50vw; /* Second style width */
+    opacity: 1; /* Fade in */
+}
+
+.viz-container {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    background-color: #ffffff; /* First style white background */
+    border: 2px solid #000000; /* First style black border */
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .analyzer-container {
+        grid-template-columns: 1fr; /* Single column on small screens */
+    }
+
+    .hero-title {
+        font-size: 2.5rem; /* Adjust font size for small screens */
+    }
+}
