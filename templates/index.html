@@ -5,17 +5,66 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Social Media Analyzer</title>
     <link rel="stylesheet" href="static/css/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body>
     <div class="landing-page">
-        <div class="background-grid">
-            <!-- Squares will be dynamically added by CSS or JavaScript -->
-        </div>
-        <div class="logo">Social Metrics AI</div>
-        <h1 class="hero-title">Analyze Your Social Media Performance with AI</h1>
-        <p class="hero-subtitle">Get detailed insights and analytics for your social media content</p>
-        <a href="/analyzer" class="get-started-btn">Get Started</a>
+        <nav class="navbar">
+            <div class="logo">SocialMetrics<span>AI</span></div>
+            <div class="nav-links">
+                <a href="#features">Features</a>
+                <a href="#about">About</a>
+                <a href="/analyzer" class="nav-cta">Get Started</a>
+            </div>
+        </nav>
+
+        <main class="hero-section">
+            <div class="hero-content">
+                <h1 class="hero-title">Transform Your Social Media Strategy</h1>
+                <p class="hero-description">
+                    Leverage AI-powered analytics to understand your audience, optimize content, and grow your social media presence.
+                </p>
+                <div class="cta-group">
+                    <a href="/analyzer" class="cta-primary">Start Analyzing</a>
+                    <a href="#features" class="cta-secondary">Learn More</a>
+                </div>
+            </div>
+            <div class="hero-visual">
+                <div class="stats-card">
+                    <i class="fas fa-chart-line"></i>
+                    <span>Analytics</span>
+                </div>
+                <div class="stats-card">
+                    <i class="fas fa-users"></i>
+                    <span>Engagement</span>
+                </div>
+                <div class="stats-card">
+                    <i class="fas fa-bullseye"></i>
+                    <span>Insights</span>
+                </div>
+            </div>
+        </main>
+
+        <section id="features" class="features-section">
+            <h2>Key Features</h2>
+            <div class="feature-cards">
+                <div class="feature-card">
+                    <i class="fas fa-robot"></i>
+                    <h3>AI Analysis</h3>
+                    <p>Advanced AI algorithms analyze your content performance</p>
+                </div>
+                <div class="feature-card">
+                    <i class="fas fa-chart-pie"></i>
+                    <h3>Real-time Stats</h3>
+                    <p>Get instant insights about your social media metrics</p>
+                </div>
+                <div class="feature-card">
+                    <i class="fas fa-lightbulb"></i>
+                    <h3>Smart Suggestions</h3>
+                    <p>Receive AI-powered recommendations for improvement</p>
+                </div>
+            </div>
+        </section>
     </div>
-    
 </body>
 </html>
