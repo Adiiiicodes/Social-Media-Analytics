@@ -1,113 +1,236 @@
+import os
 from flask import Flask, render_template, request, jsonify
-from pydantic import BaseModel
-from typing import Optional, List, Dict, Union
-from dataclasses import dataclass
-from enum import Enum
+from astrapy.db import AstraDB  # Corrected import for the correct class
 from collections import defaultdict
 import requests
 
 app = Flask(__name__)
 
-# Enum for message sender
-class MessageSender(str, Enum):
-    AI = "ai"
+# ------------------------
+# Constants & Config
+# ------------------------
+
+class Config:
+    ASTRA_DB_ID = "d6b8bd5b-3e9c-4084-8bb3-8f40f687310d"
+    ASTRA_DB_REGION = "us-east1"
+    ASTRA_DB_KEYSPACE = "default"
+    APPLICATION_TOKEN = "AstraCS:NYGBBviIaFDSNlMYyddZvrzf:287fd88aa028ecdb6b90c91234277e5fcae4ba1cc4fb4e3e5ad8a50e3787bb99"
+    GROQ_API_KEY = "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"
+    GROQ_API_BASE = "https://api.groq.com"
+    MODEL_NAME = "llama-3.1-8b-instant"
+    API_ENDPOINT = f"https://{ASTRA_DB_ID}-{ASTRA_DB_REGION}.apps.astra.datastax.com"
+
+# ------------------------
+# Database Connection
+# ------------------------
+
+class DatabaseManager:
+    def __init__(self):
+        self.client = AstraDB(
+            token=Config.APPLICATION_TOKEN,
+            api_endpoint=Config.API_ENDPOINT
+        )
+
+    def query(self, collection, query):
+     try:
+        # Log the query being executed
+        print(f"Executing query on {collection}: {query}")
+        
+        # Get the collection
+        astra_collection = self.client.collection(collection)
+        
+        # Execute the query
+        result = astra_collection.find(query)
+        
+        # Log the results
+        print(f"Query result: {list(result)}")
+        
+        return list(result)
+     except Exception as e:
+        print(f"Database Query Error: {e}")
+        return []
+
+
+# ------------------------
+# Message Management
+# ------------------------
+
+class MessageSender:
     USER = "user"
+    AI = "ai"
 
-# Source model for message properties
-class Source(BaseModel):
-    id: Optional[str] = None
-    display_name: Optional[str] = None
-    source: Optional[str] = None
+class Message:
+    def __init__(self, text, sender, sender_name=""):
+        self.text = text
+        self.sender = sender
+        self.sender_name = sender_name
 
-# Message properties such as colors and icons
-class MessageProperties(BaseModel):
-    source: Optional[Source] = None
-    icon: Optional[str] = None
-    background_color: Optional[str] = None
-    text_color: Optional[str] = None
+    def to_dict(self):
+        return {
+            "text": self.text,
+            "sender": self.sender,
+            "sender_name": self.sender_name,
+        }
 
-# Message model for sending and receiving messages
-class Message(BaseModel):
-    text: str
-    sender: str = "user"
-    sender_name: str = "User"
-    session_id: Optional[str] = None
-    flow_id: Optional[str] = None
-    files: Optional[List[str]] = None
-    properties: Optional[MessageProperties] = None
+class MessageProperties:
+    def __init__(self, background_color="#FFFFFF", text_color="#000000"):
+        self.background_color = background_color
+        self.text_color = text_color
 
-    @classmethod
-    def from_template(cls, **kwargs):
-        return cls(**kwargs)
+    def to_dict(self):
+        return {
+            "background_color": self.background_color,
+            "text_color": self.text_color,
+        }
 
-# DataParser for formatting data into text
-class DataParser:
-    @staticmethod
-    def data_to_text(template: str, data: Union[List, Dict], sep: str = "\n") -> str:
-        if isinstance(data, dict):
-            return template.format(**data)
-        elif isinstance(data, list):
-            return sep.join(template.format(**item) if isinstance(item, dict) else str(item) for item in data)
-        return str(data)
+# ------------------------
+# Chat Handler
+# ------------------------
 
-# ChatHandler to manage conversation logic
 class ChatHandler:
     def __init__(self):
+        self.db = DatabaseManager()
         self.messages = []
-        self.groq_api_key = "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"
-        self.groq_api_base = "https://api.groq.com"
-        self.model_name = "llama-3.1-8b-instant"
-        self.data_parser = DataParser()
 
-    def store_message(self, message: Message) -> Message:
-        self.messages.append(message.dict())
-        return message
+    def fetch_context(self, query: str) -> str:
+        results = self.db.query('sample_data', {})
+        print("Raw Query Results:", results)
 
-    def parse_data(self, data: Union[List, Dict], template: str = "{text}", sep: str = "\n") -> str:
-        return self.data_parser.data_to_text(template, data, sep)
 
-    def build_prompt(self, template: str, context: str, **kwargs) -> Message:
-        kwargs = defaultdict(lambda: "", kwargs)
-        kwargs["context"] = context
-        text = template.format_map(kwargs)
-        return Message(text=text)
+    def store_message(self, message: Message):
+        self.messages.append(message)
 
-    def get_ai_response(self, user_message: str) -> str:
-        url = f"{self.groq_api_base}/openai/v1/chat/completions"  # Fixed endpoint
+    def get_ai_response(self, prompt_text: str) -> str:
         headers = {
-            "Authorization": f"Bearer {self.groq_api_key}",
-            "Content-Type": "application/json"
+            "Authorization": f"Bearer {Config.GROQ_API_KEY}",
+            "Content-Type": "application/json",
         }
-        data = {
-            "model": self.model_name,
-            "messages": [{"role": "user", "content": user_message}],
-            "temperature": 0.1,
-            "max_tokens": 1000
+        payload = {
+            "model": Config.MODEL_NAME,
+            "messages": [{"role": "system", "content": prompt_text}],
         }
-
+        
         try:
-            response = requests.post(url, headers=headers, json=data, timeout=10)
+            response = requests.post(
+                f"{Config.GROQ_API_BASE}/openai/v1/chat/completions",
+                headers=headers,
+                json=payload
+            )
             response.raise_for_status()
             return response.json()["choices"][0]["message"]["content"]
-        except requests.exceptions.RequestException as e:
-            print(f"API Error: {str(e)}")  # Debug logging
-            return f"Error communicating with AI service: {str(e)}"
         except Exception as e:
-            print(f"General Error: {str(e)}")  # Debug logging
-            return f"An unexpected error occurred: {str(e)}"
+            print(f"AI API Error: {e}")
+            return "I apologize, but I encountered an error processing your request."
 
-    def analyze_social_media(self, message: str) -> Dict:
-        # Placeholder for social media analysis logic
-        # This would be replaced with actual analysis code
-        return {
-            "engagement_rate": 4.5,
-            "likes": 1200,
-            "comments": 45,
-            "shares": 30,
-            "sentiment": "positive"
+    def analyze_social_media(self, message: str) -> dict:
+        """
+        Analyzes social media content for metrics, sentiment, and engagement potential.
+        """
+        analysis_data = {
+            'metrics': {},
+            'sentiment': {},
+            'recommendations': []
         }
+        
+        # Calculate basic metrics
+        analysis_data['metrics'] = {
+            'character_count': len(message),
+            'word_count': len(message.split()),
+            'hashtag_count': message.count('#'),
+            'mention_count': message.count('@'),
+            'url_count': message.lower().count('http'),
+            'emoji_count': sum(1 for char in message if ord(char) >= 0x1F600)
+        }
+        
+        # Perform sentiment analysis
+        positive_words = {'great', 'awesome', 'excellent', 'happy', 'love', 'amazing', 'wonderful'}
+        negative_words = {'bad', 'poor', 'terrible', 'hate', 'awful', 'horrible', 'disappointing'}
+        neutral_words = {'okay', 'fine', 'normal', 'average', 'decent'}
+        
+        words = set(message.lower().split())
+        positive_count = len(words.intersection(positive_words))
+        negative_count = len(words.intersection(negative_words))
+        neutral_count = len(words.intersection(neutral_words))
+        
+        analysis_data['sentiment'] = {
+            'positive_words': positive_count,
+            'negative_words': negative_count,
+            'neutral_words': neutral_count,
+            'overall_sentiment': self._determine_sentiment(positive_count, negative_count, neutral_count)
+        }
+        
+        # Generate engagement recommendations
+        analysis_data['recommendations'] = self._generate_recommendations(analysis_data['metrics'])
+        
+        # Add engagement potential score
+        analysis_data['engagement_score'] = self._calculate_engagement_score(analysis_data)
+        
+        return analysis_data
+
+    def _determine_sentiment(self, pos_count, neg_count, neu_count) -> str:
+        if pos_count > neg_count and pos_count > neu_count:
+            return 'positive'
+        elif neg_count > pos_count and neg_count > neu_count:
+            return 'negative'
+        return 'neutral'
+
+    def _generate_recommendations(self, metrics) -> list:
+        recommendations = []
+        
+        if metrics['character_count'] > 280:
+            recommendations.append("Consider shortening the message for better engagement on Twitter")
+        
+        if metrics['hashtag_count'] == 0:
+            recommendations.append("Add relevant hashtags to increase visibility")
+        elif metrics['hashtag_count'] > 3:
+            recommendations.append("Consider reducing number of hashtags to avoid appearing spammy")
+            
+        if metrics['url_count'] == 0:
+            recommendations.append("Consider adding a relevant link for more information")
+            
+        if metrics['mention_count'] == 0:
+            recommendations.append("Tag relevant accounts to increase reach")
+            
+        if metrics['emoji_count'] == 0:
+            recommendations.append("Consider adding emojis to make your message more engaging")
+        elif metrics['emoji_count'] > 4:
+            recommendations.append("Consider reducing the number of emojis used")
+            
+        return recommendations
+
+    def _calculate_engagement_score(self, analysis_data) -> float:
+        """Calculate an engagement potential score from 0-100"""
+        score = 50  # Start at neutral
+        
+        # Adjust based on metrics
+        metrics = analysis_data['metrics']
+        if 100 <= metrics['character_count'] <= 200:
+            score += 10
+        if 1 <= metrics['hashtag_count'] <= 3:
+            score += 10
+        if metrics['url_count'] == 1:
+            score += 5
+        if 1 <= metrics['emoji_count'] <= 3:
+            score += 5
+            
+        # Adjust based on sentiment
+        sentiment = analysis_data['sentiment']
+        if sentiment['overall_sentiment'] == 'positive':
+            score += 10
+        elif sentiment['overall_sentiment'] == 'negative':
+            score -= 5
+            
+        return min(max(score, 0), 100)  # Ensure score stays between 0-100
+
+# ------------------------
+# Initialize Handlers
+# ------------------------
 
 chat_handler = ChatHandler()
+
+# ------------------------
+# Routes
+# ------------------------
 
 @app.route('/')
 def home():
@@ -119,80 +242,62 @@ def analyzer():
 
 @app.route('/api/chat', methods=['POST'])
 def chat():
-    data = request.json
-    user_message = Message(
-        text=data['message'],
-        sender=MessageSender.USER,
-        sender_name="User",
-        properties=MessageProperties(
-            background_color="#FFE147",
-            text_color="#000000"
-        )
-    )
-    chat_handler.store_message(user_message)
+    try:
+        data = request.json
+        user_message = data['message']
 
-    # Check if analysis is requested
-    analysis_data = None
-    if any(keyword in data['message'].lower() for keyword in ['analytics', 'stats', 'metrics']):
+        # Store user message
+        user_message_obj = Message(
+            text=user_message,
+            sender=MessageSender.USER,
+            sender_name="User"
+        )
+        chat_handler.store_message(user_message_obj)
+
+        # Get context and AI response
+        context = chat_handler.fetch_context(user_message)
+        prompt = f"{context}\nUser: {user_message}\nAI:"
+        ai_response_text = chat_handler.get_ai_response(prompt)
+
+        # Store and return AI response
+        ai_message = Message(
+            text=ai_response_text,
+            sender=MessageSender.AI,
+            sender_name="AI Assistant"
+        )
+        chat_handler.store_message(ai_message)
+
+        return jsonify({"response": ai_message.to_dict()})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/analyze', methods=['POST'])
+def analyze():
+    try:
+        data = request.json
+        if not data or 'message' not in data:
+            return jsonify({"error": "No message provided"}), 400
+            
         analysis_data = chat_handler.analyze_social_media(data['message'])
-    
-    # Build context and get AI response
-    context = """Content_Type\tTheme_Colors\tLikes\tComments\tViews\tPlatform\tPersonality\tField\tDate\tPublic_Sentiment\tChannel\tDislikes\tTheme
-    Podcast\tStudio Setup\t10K\t917\t367k\tYoutube\tCycle Baba\tCyclist\t02-Jan-25\tPositive\tBeerBiceps\t161\t
-    Podcast\tStudio Setup\t51K\t2.6K\t2.2M\tYoutube\tKriti Sanon\tActress\t28-Dec-24\tNegative\tBeerBiceps\t693\t
-    Podcast\tStudio Setup\t37K\t2.5K\t1.2M\tYoutube\tAP Dhillon\tSinger\t25-Dec-24\tNegative\tBeerBiceps\t1.1K\t
-    Podcast\tStudio Setup\t33K\t1.3K\t1.3M\tYoutube\tSankalp Jain\tSex\t21-Dec-24\tPositive\tBeerBiceps\t545\t
-    Podcast\tStudio Setup\t43K\t1.9K\t1.5M\tYoutube\tVarun Dhawan\tActor\t19-Dec-24\tNegative\tBeerBiceps\t514\t
-    Podcast\tStudio Setup\t53K\t4.5K\t2.2M\tYoutube\tShishir Kumar\tGhost\t14-Dec-24\tVery Negative\tBeerBiceps\t1.1K\t
-    Podcast\tStudio Setup\t19K\t1.9K\t695K\tYoutube\tSanjeev Goenka\tCricket\t11-Dec-24\tNegative\tBeerBiceps\t873\t
-    Podcast\tStudio Setup\t11K\t515\t402K\tYoutube\tDr. Nayana Sivaraj\tAyurveda\t09-Dec-24\tPositive\tBeerBiceps\t228\t
-    Podcast\tStudio Setup\t15K\t1K\t778K\tYoutube\tDr. Vivek Allahbadia\tBone Pain\t02-Dec-24\tPositive\tBeerBiceps\t131\t
-    Podcast\tStudio Setup\t15K\t1.1K\t628K\tYoutube\tSumit Shah\tCrypto\t05-Dec-24\tPositive\tBeerBiceps\t197\t
-    Podcast\tStudio Setup\t7.9K\t543\t282K\tYoutube\tMithali Raj\tCricket\t30-Nov-24\tPositive\tBeerBiceps\t105\t
-    Podcast\tStudio Setup\t27K\t1.2K\t894K\tYoutube\tAnkur Warikoo\tFintuber\t27-Nov-24\tVery Positive\tBeerBiceps\t222\t
-    Podcast\tStudio Setup\t31K\t4.2K\t2.2M\tYoutube\tPankit Goyal\tVaastu\t21-Nov-24\tVery Negative\tBeerBiceps\t22K\t
-    Podcast\tStudio Setup\t77K\t6.8K\t2.1M\tYoutube\tNitish Rajput\tNews Youtube\t19-Nov-24\tPositive\tBeerBiceps\t740\t
-    Podcast\tStudio Setup\t59K\t5.3K\t2.6M\tYoutube\tRupa Bhaty\tRigveda\t16-Nov-24\tPositive\tBeerBiceps\t1.5K\t
-    Podcast\tStudio Setup\t53K\t2.5K\t1.8M\tYoutube\tDr. Alok Sharma\tSleep\t14-Nov-24\tPositive\tBeerBiceps\t499\t
-    Podcast\tStudio Setup\t109K\t3.6K\t4.2M\tYoutube\tRohit Shetty and Ajay Devgan\tBollywood\t09-Nov-24\tNegative\tBeerBiceps\t2K\t
-    Podcast\tStudio Setup\t28K\t1.3K\t845K\tYoutube\tFood Pharmer\tHealth Youtuber\t07-Nov-24\tVery Positive\tBeerBiceps\t134\t
-    Podcast\tStudio Setup\t3.9K\t372\t136K\tYoutube\tAnkit Batra\tBhajanSpecial\t04-Nov-24\tPositive\tBeerBiceps\t74\t
-    Podcast\tStudio Setup\t44K\t2.5K\t1.8M\tYoutube\tDevi Chitralekhaji\tKrishna\t30-Oct-24\tPositive\tBeerBiceps\t725\t
-    Podcast\tStudio Setup\t48K\t2.1K\t2M\tYoutube\tDr. Anchal\tSkincare\t28-Oct-24\tPositive\tBeerBiceps\t451\t
-    Podcast\tStudio Setup\t18K\t1.6K\t630K\tYoutube\tShaan\tSinger\t24-Oct-24\tPositive\tBeerBiceps\t265\t
-    Podcast\tStudio Setup\t39K\t1.4K\t1.9M\tYoutube\tKeshav Inani\tBusiness and Spirituality\t21-Oct-24\tPositive\tBeerBiceps\t637\t
-    Podcast\tStudio Setup\t26K\t1.2K\t1.1M\tYoutube\tGynaec\tPregnancy\t18-Oct-24\tPositive\tBeerBiceps\t926\t
-    Podcast\tStudio Setup\t50K\t4.5K\t2.2M\tYoutube\tMallika Sherawat\tBollywood\t11-Oct-24\tNegative\tBeerBiceps\t853\t
-    """
+        return jsonify({"analysis_data": analysis_data})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
-    myprompt = """act as a social media analyst and give me the analysis of the following data:{context} , and keep the answers within 50 words and more humanly and in conversational toneand in hinglish language"""
-    
-    prompt = chat_handler.build_prompt("{myprompt}\n{context}\n{user_query}", user_query=data['message'], context=context)
-    ai_response_text = chat_handler.get_ai_response(prompt.text)
+# ------------------------
+# Error Handlers
+# ------------------------
 
-    # Prepare AI message
-    ai_message = Message(
-        text=ai_response_text,
-        sender=MessageSender.AI,
-        sender_name="AI Assistant",
-        properties=MessageProperties(
-            background_color="#FF4D4D",
-            text_color="#000000"
-        )
-    )
-    chat_handler.store_message(ai_message)
+@app.errorhandler(404)
+def not_found_error(error):
+    return jsonify({"error": "Resource not found"}), 404
 
-    return jsonify({
-        "response": ai_message.dict(),
-        "should_show_viz": bool(analysis_data),
-        "analysis_data": analysis_data
-    })
+@app.errorhandler(500)
+def internal_error(error):
+    return jsonify({"error": "Internal server error"}), 500
 
-@app.route('/api/parse', methods=['POST'])
-def parse():
-    data = request.json
-    parsed_data = chat_handler.parse_data(data['data'], template=data.get('template', "{text}"))
-    return jsonify({"parsed_data": parsed_data})
+# ------------------------
+# Run the App
+# ------------------------
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     app.run(debug=True)
