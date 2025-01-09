@@ -5,6 +5,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const vizSection = document.getElementById('visualizationSection');
     const vizContainer = document.getElementById('visualizationContainer');
 
+    
+        
+
     async function sendMessage() {
         const message = userInput.value.trim();
         if (message === '') return;
@@ -67,8 +70,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function parseDataToVisualization(data) {
-        // Parse the response and create appropriate visualization
-        // This is a placeholder - implement actual visualization logic
+        
         return `
             <h3>Analysis Results</h3>
             <div class="viz-content">
