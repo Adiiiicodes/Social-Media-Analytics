@@ -384,3 +384,42 @@ textarea {
     }
 }
 
+/* Guidelines Section */
+.guidelines-section {
+    padding: 4rem;
+    background: var(--light);
+    border-top: 3px solid var(--primary);
+    text-align: center;
+}
+
+.guidelines-section h2 {
+    font-size: 2.5rem;
+    color: var(--primary);
+    margin-bottom: 2rem;
+}
+
+.guidelines-content {
+    max-width: 800px;
+    margin: 0 auto;
+    text-align: left;
+    font-size: 1.2rem;
+    line-height: 1.6;
+    color: var(--primary);
+    background: white;
+    padding: 2rem;
+    border: 3px solid var(--primary);
+    box-shadow: var(--shadow-offset) var(--shadow-offset) 0 var(--primary);
+    border-radius: 8px;
+}
+
+.guidelines-content p {
+    margin: 1rem 0;
+    font-weight: 500;
+    color: var(--primary);
+}
+
+.guidelines-content p strong {
+    color: var(--accent);
+    font-size: 1.3rem;
+}
+
