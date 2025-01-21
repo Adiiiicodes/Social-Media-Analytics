@@ -1,206 +1,255 @@
-from flask import Flask, render_template, request, jsonify
-from pydantic import BaseModel
-from typing import Optional, List, Dict, Union
-from dataclasses import dataclass
-from enum import Enum
-from collections import defaultdict
+from flask import Flask, request, jsonify, render_template, session
+from werkzeug.utils import secure_filename
+import os
+import uuid
 import requests
+from bs4 import BeautifulSoup
+import PyPDF2
+from langchain_text_splitters import CharacterTextSplitter
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_chroma import Chroma
+from requests.adapters import HTTPAdapter
+from urllib3.util import Retry
+import time
+from groq import Groq
+import os
+from flask import jsonify, request, render_template
+from werkzeug.utils import secure_filename
+import uuid
+from typing import Dict, Any
 
 app = Flask(__name__)
+app.secret_key = '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'  # Use a secure secret key
 
-# Enum for message sender
-class MessageSender(str, Enum):
-    AI = "ai"
-    USER = "user"
+# Configuration
+UPLOAD_FOLDER = 'temp_uploads'
+MAX_CONTENT_LENGTH = 10 * 1024 * 1024  # 10MB max file size
+ALLOWED_EXTENSIONS = {'pdf'}
+TEMP_EMAIL_STORAGE = {}
 
-# Source model for message properties
-class Source(BaseModel):
-    id: Optional[str] = None
-    display_name: Optional[str] = None
-    source: Optional[str] = None
+# Create upload folder if it doesn't exist
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# Message properties such as colors and icons
-class MessageProperties(BaseModel):
-    source: Optional[Source] = None
-    icon: Optional[str] = None
-    background_color: Optional[str] = None
-    text_color: Optional[str] = None
+# Initialize embeddings
+embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-mpnet-base-v2")
 
-# Message model for sending and receiving messages
-class Message(BaseModel):
-    text: str
-    sender: str = "user"
-    sender_name: str = "User"
-    session_id: Optional[str] = None
-    flow_id: Optional[str] = None
-    files: Optional[List[str]] = None
-    properties: Optional[MessageProperties] = None
+# Initialize ChromaDB
+chroma_persist_directory = "chroma_db"
+os.makedirs(chroma_persist_directory, exist_ok=True)
 
-    @classmethod
-    def from_template(cls, **kwargs):
-        return cls(**kwargs)
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-# DataParser for formatting data into text
-class DataParser:
-    @staticmethod
-    def data_to_text(template: str, data: Union[List, Dict], sep: str = "\n") -> str:
-        if isinstance(data, dict):
-            return template.format(**data)
-        elif isinstance(data, list):
-            return sep.join(template.format(**item) if isinstance(item, dict) else str(item) for item in data)
-        return str(data)
+def process_pdf(file_path):
+    """Extract text from PDF."""
+    text = ""
+    with open(file_path, 'rb') as file:
+        pdf_reader = PyPDF2.PdfReader(file)
+        for page in pdf_reader.pages:
+            text += page.extract_text()
+    return text
 
-# ChatHandler to manage conversation logic
-class ChatHandler:
-    def __init__(self):
-        self.messages = []
-        self.groq_api_key = "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"
-        self.groq_api_base = "https://api.groq.com"
-        self.model_name = "llama-3.1-8b-instant"
-        self.data_parser = DataParser()
+def split_text(text, chunk_size=1000, chunk_overlap=200):
+    """Split text into chunks using the text splitter."""
+    splitter = CharacterTextSplitter(
+        separator="\n",
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
+    )
+    return splitter.split_text(text)
 
-    def store_message(self, message: Message) -> Message:
-        self.messages.append(message.dict())
-        return message
+def get_with_retry(url):
+    """Make a GET request with retries and polite delay."""
+    session = requests.Session()
+    retry = Retry(total=3, backoff_factor=1)
+    adapter = HTTPAdapter(max_retries=retry)
+    session.mount('http://', adapter)
+    session.mount('https://', adapter)
 
-    def parse_data(self, data: Union[List, Dict], template: str = "{text}", sep: str = "\n") -> str:
-        return self.data_parser.data_to_text(template, data, sep)
+    headers = {
+        'User-Agent': 'Friendly Bot 1.0 (cookiebolte@gmail.com)',
+    }
 
-    def build_prompt(self, template: str, context: str, **kwargs) -> Message:
-        kwargs = defaultdict(lambda: "", kwargs)
-        kwargs["context"] = context
-        text = template.format_map(kwargs)
-        return Message(text=text)
+    response = session.get(url, headers=headers)
+    time.sleep(2)  # Polite delay between requests
+    return response
 
-    def get_ai_response(self, user_message: str) -> str:
-        url = f"{self.groq_api_base}/openai/v1/chat/completions"  # Fixed endpoint
-        headers = {
-            "Authorization": f"Bearer {self.groq_api_key}",
-            "Content-Type": "application/json"
-        }
-        data = {
-            "model": self.model_name,
-            "messages": [{"role": "user", "content": user_message}],
-            "temperature": 0.1,
-            "max_tokens": 1000
-        }
+def scrape_job_posting(url):
+    """Scrape job posting from a URL using retry logic."""
+    try:
+        response = get_with_retry(url)
+        response.raise_for_status()
 
-        try:
-            response = requests.post(url, headers=headers, json=data, timeout=10)
-            response.raise_for_status()
-            return response.json()["choices"][0]["message"]["content"]
-        except requests.exceptions.RequestException as e:
-            print(f"API Error: {str(e)}")  # Debug logging
-            return f"Error communicating with AI service: {str(e)}"
-        except Exception as e:
-            print(f"General Error: {str(e)}")  # Debug logging
-            return f"An unexpected error occurred: {str(e)}"
+        soup = BeautifulSoup(response.text, 'html.parser')
+        for element in soup(['script', 'style', 'header', 'footer', 'nav', 'meta', 'iframe']):
+            element.decompose()
 
-    def analyze_social_media(self, message: str) -> Dict:
-        # Placeholder for social media analysis logic
-        # This would be replaced with actual analysis code
-        return {
-            "engagement_rate": 4.5,
-            "likes": 1200,
-            "comments": 45,
-            "shares": 30,
-            "sentiment": "positive"
-        }
+        content = soup.get_text(separator="\n", strip=True)
+        if len(content) < 50:
+            return None
+        return content
 
-chat_handler = ChatHandler()
+    except Exception as e:
+        print(f"Error scraping job posting: {e}")
+        return None
 
 @app.route('/')
-def home():
+def index():
     return render_template('index.html')
 
-@app.route('/analyzer')
-def analyzer():
-    return render_template('analyzer.html')
-
-@app.route('/api/chat', methods=['POST'])
-def chat():
-    data = request.json
-    user_message = Message(
-        text=data['message'],
-        sender=MessageSender.USER,
-        sender_name="User",
-        properties=MessageProperties(
-            background_color="#FFE147",
-            text_color="#000000"
-        )
-    )
-    chat_handler.store_message(user_message)
-
-    # Check if analysis is requested
-    analysis_data = None
-    if any(keyword in data['message'].lower() for keyword in ['analytics', 'stats', 'metrics']):
-        analysis_data = chat_handler.analyze_social_media(data['message'])
+def create_email_prompt(form_data: Dict[str, Any], job_posting_text: str) -> str:
+    return f"""
+    Generate a professional email using the following information:
     
-    # Build context and get AI response
-    context = """Content_Type\tTheme_Colors\tLikes\tComments\tViews\tPlatform\tPersonality\tField\tDate\tPublic_Sentiment\tChannel\tDislikes\tTheme
-    Podcast\tStudio Setup\t10K\t917\t367k\tYoutube\tCycle Baba\tCyclist\t02-Jan-25\tPositive\tBeerBiceps\t161\t
-    Podcast\tStudio Setup\t51K\t2.6K\t2.2M\tYoutube\tKriti Sanon\tActress\t28-Dec-24\tNegative\tBeerBiceps\t693\t
-    Podcast\tStudio Setup\t37K\t2.5K\t1.2M\tYoutube\tAP Dhillon\tSinger\t25-Dec-24\tNegative\tBeerBiceps\t1.1K\t
-    Podcast\tStudio Setup\t33K\t1.3K\t1.3M\tYoutube\tSankalp Jain\tSex\t21-Dec-24\tPositive\tBeerBiceps\t545\t
-    Podcast\tStudio Setup\t43K\t1.9K\t1.5M\tYoutube\tVarun Dhawan\tActor\t19-Dec-24\tNegative\tBeerBiceps\t514\t
-    Podcast\tStudio Setup\t53K\t4.5K\t2.2M\tYoutube\tShishir Kumar\tGhost\t14-Dec-24\tVery Negative\tBeerBiceps\t1.1K\t
-    Podcast\tStudio Setup\t19K\t1.9K\t695K\tYoutube\tSanjeev Goenka\tCricket\t11-Dec-24\tNegative\tBeerBiceps\t873\t
-    Podcast\tStudio Setup\t11K\t515\t402K\tYoutube\tDr. Nayana Sivaraj\tAyurveda\t09-Dec-24\tPositive\tBeerBiceps\t228\t
-    Podcast\tStudio Setup\t15K\t1K\t778K\tYoutube\tDr. Vivek Allahbadia\tBone Pain\t02-Dec-24\tPositive\tBeerBiceps\t131\t
-    Podcast\tStudio Setup\t15K\t1.1K\t628K\tYoutube\tSumit Shah\tCrypto\t05-Dec-24\tPositive\tBeerBiceps\t197\t
-    Podcast\tStudio Setup\t7.9K\t543\t282K\tYoutube\tMithali Raj\tCricket\t30-Nov-24\tPositive\tBeerBiceps\t105\t
-    Podcast\tStudio Setup\t27K\t1.2K\t894K\tYoutube\tAnkur Warikoo\tFintuber\t27-Nov-24\tVery Positive\tBeerBiceps\t222\t
-    Podcast\tStudio Setup\t31K\t4.2K\t2.2M\tYoutube\tPankit Goyal\tVaastu\t21-Nov-24\tVery Negative\tBeerBiceps\t22K\t
-    Podcast\tStudio Setup\t77K\t6.8K\t2.1M\tYoutube\tNitish Rajput\tNews Youtube\t19-Nov-24\tPositive\tBeerBiceps\t740\t
-    Podcast\tStudio Setup\t59K\t5.3K\t2.6M\tYoutube\tRupa Bhaty\tRigveda\t16-Nov-24\tPositive\tBeerBiceps\t1.5K\t
-    Podcast\tStudio Setup\t53K\t2.5K\t1.8M\tYoutube\tDr. Alok Sharma\tSleep\t14-Nov-24\tPositive\tBeerBiceps\t499\t
-    Podcast\tStudio Setup\t109K\t3.6K\t4.2M\tYoutube\tRohit Shetty and Ajay Devgan\tBollywood\t09-Nov-24\tNegative\tBeerBiceps\t2K\t
-    Podcast\tStudio Setup\t28K\t1.3K\t845K\tYoutube\tFood Pharmer\tHealth Youtuber\t07-Nov-24\tVery Positive\tBeerBiceps\t134\t
-    Podcast\tStudio Setup\t3.9K\t372\t136K\tYoutube\tAnkit Batra\tBhajanSpecial\t04-Nov-24\tPositive\tBeerBiceps\t74\t
-    Podcast\tStudio Setup\t44K\t2.5K\t1.8M\tYoutube\tDevi Chitralekhaji\tKrishna\t30-Oct-24\tPositive\tBeerBiceps\t725\t
-    Podcast\tStudio Setup\t48K\t2.1K\t2M\tYoutube\tDr. Anchal\tSkincare\t28-Oct-24\tPositive\tBeerBiceps\t451\t
-    Podcast\tStudio Setup\t18K\t1.6K\t630K\tYoutube\tShaan\tSinger\t24-Oct-24\tPositive\tBeerBiceps\t265\t
-    Podcast\tStudio Setup\t39K\t1.4K\t1.9M\tYoutube\tKeshav Inani\tBusiness and Spirituality\t21-Oct-24\tPositive\tBeerBiceps\t637\t
-    Podcast\tStudio Setup\t26K\t1.2K\t1.1M\tYoutube\tGynaec\tPregnancy\t18-Oct-24\tPositive\tBeerBiceps\t926\t
-    Podcast\tStudio Setup\t50K\t4.5K\t2.2M\tYoutube\tMallika Sherawat\tBollywood\t11-Oct-24\tNegative\tBeerBiceps\t853\t
+    Sender's Name: {form_data['name']}
+    Company: {form_data['company']}
+    Services Offered: {form_data['services']}
+    Recipient: {form_data['recipient']}
+    Goal: {form_data['goal']}
+    Problem to Solve: {form_data['problem']}
+    Past Work Experience: {form_data['pastWork']}
+    Desired Tone: {form_data['tone']}
+    Call to Action: {form_data['cta']}
+    Benefits: {form_data['benefits']}
+    Deadline: {form_data['deadline']}
+    
+    Job Posting Details:
+    {job_posting_text}
+    
+    Create a persuasive email that:
+    1. Maintains a {form_data['tone']} tone
+    2. Clearly addresses the recipient's needs from the job posting
+    3. Highlights relevant experience and benefits
+    4. Includes a clear call to action
+    5. Uses the provided sign-off: {form_data['customSignoff'] if form_data['customSignoff'] else form_data['signoff']}
     """
 
-    myprompt = """You are a social media analyst. Follow these rules strictly:
-1. Answer ONLY what is asked in the user's question
-2. Maximum response length: 30 words
-3. Use Hinglish language in a conversational tone , but if user is speaking in english then the weightage of english should be high in your hinglish response
-4. Focus only on the most important metrics/insights
-5. No additional explanations or context
+@app.route('/generate', methods=['GET', 'POST'])
+def generate_email():
+    if request.method == 'GET':
+        return render_template('generate.html')
 
-Analyze this data: {context}
-User question: {user_query}"""
-    
-    prompt = chat_handler.build_prompt(myprompt, user_query=data['message'], context=context)
-    ai_response_text = chat_handler.get_ai_response(prompt.text)
+    if request.method == 'POST':
+        try:
+            # File handling
+            if 'portfolio' not in request.files:
+                return jsonify({'success': False, 'message': 'No file uploaded'})
 
-    # Prepare AI message
-    ai_message = Message(
-        text=ai_response_text,
-        sender=MessageSender.AI,
-        sender_name="AI Assistant",
-        properties=MessageProperties(
-            background_color="#FF4D4D",
-            text_color="#000000"
-        )
-    )
-    chat_handler.store_message(ai_message)
+            file = request.files['portfolio']
+            if file.filename == '':
+                return jsonify({'success': False, 'message': 'No file selected'})
 
-    return jsonify({
-        "response": ai_message.dict(),
-        "should_show_viz": bool(analysis_data),
-        "analysis_data": analysis_data
-    })
+            if not allowed_file(file.filename):
+                return jsonify({'success': False, 'message': 'Invalid file type'})
 
-@app.route('/api/parse', methods=['POST'])
-def parse():
-    data = request.json
-    parsed_data = chat_handler.parse_data(data['data'], template=data.get('template', "{text}"))
-    return jsonify({"parsed_data": parsed_data})
+            # Generate unique ID and save file
+            email_id = str(uuid.uuid4())
+            filename = secure_filename(file.filename)
+            temp_path = os.path.join(UPLOAD_FOLDER, f"{email_id}_{filename}")
+            file.save(temp_path)
 
-if __name__ == "__main__":
+            # Process portfolio
+            portfolio_text = process_pdf(temp_path)
+            chunks = split_text(portfolio_text)
+
+            # Store in vector database
+            vectorstore = Chroma(
+                collection_name=f"portfolio_{email_id}",
+                embedding_function=embeddings,
+                persist_directory=chroma_persist_directory
+            )
+            vectorstore.add_texts(chunks)
+
+            # Get and validate job URL
+            job_url = request.form.get('jobUrl')
+            if not job_url:
+                return jsonify({'success': False, 'message': 'Job posting URL is required'})
+
+            job_posting_text = scrape_job_posting(job_url)
+            if not job_posting_text:
+                return jsonify({'success': False, 'message': 'Unable to scrape job posting. Please check the URL.'})
+
+            # Collect form data
+            form_data = {
+                'name': request.form.get('name'),
+                'company': request.form.get('company'),
+                'services': request.form.get('services'),
+                'recipient': request.form.get('recipient'),
+                'goal': request.form.get('goal'),
+                'problem': request.form.get('problem'),
+                'pastWork': request.form.get('pastWork'),
+                'tone': request.form.get('tone'),
+                'cta': request.form.get('cta'),
+                'benefits': request.form.get('benefits'),
+                'deadline': request.form.get('deadline'),
+                'signoff': request.form.get('signoff'),
+                'customSignoff': request.form.get('customSignoff'),
+                'portfolio_chunks': chunks,
+                'job_posting': job_posting_text
+            }
+
+            # Initialize Groq client
+            groq_client = Groq(api_key=os.getenv('GROQ_API_KEY'))
+            
+            # Create prompt and generate email
+            prompt = create_email_prompt(form_data, job_posting_text)
+            
+            # Make API call to Groq
+            completion = groq_client.chat.completions.create(
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a professional email writer who crafts compelling, personalized business correspondence."
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                model="mixtral-8x7b-32768",  # Or your preferred Groq model
+                temperature=0.7,
+                max_tokens=1000
+            )
+
+            # Extract generated email
+            email_content = completion.choices[0].message.content
+
+            # Store email data
+            TEMP_EMAIL_STORAGE[email_id] = {
+                'form_data': form_data,
+                'email_content': email_content
+            }
+
+            # Clean up
+            os.remove(temp_path)
+
+            return jsonify({'success': True, 'emailId': email_id})
+            
+        except Exception as e:
+            print(f"Error generating email: {e}")
+            return jsonify({'success': False, 'message': str(e)})
+
+@app.route('/preview')
+def preview_email():
+    email_id = request.args.get('id')
+    if not email_id or email_id not in TEMP_EMAIL_STORAGE:
+        return "Email not found", 404
+
+    email_data = TEMP_EMAIL_STORAGE[email_id]
+    email_content = email_data.get('email_content', 'Email content is not available.')
+
+    return render_template('preview.html', email_content=email_content, email_id=email_id)
+
+@app.route('/modify_email', methods=['POST'])
+def modify_email():
+    email_id = request.json.get('emailId')
+    modified_content = request.json.get('content')
+
+    if not email_id or email_id not in TEMP_EMAIL_STORAGE:
+        return jsonify({'success': False, 'message': 'Email not found'})
+
+    TEMP_EMAIL_STORAGE[email_id]['email_content'] = modified_content
+    return jsonify({'success': True})
+
+if __name__ == '__main__':
     app.run(debug=True)
